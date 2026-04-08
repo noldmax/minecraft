@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "randomizer",
+	"version": "${version}",
+	"name": "Minecraft Randomizer",
+	"description": "Randomizes recipes, loot tables, mob drops, spawns, and more.",
+	"authors": [],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.example.randomizer.RandomizerMod"
+		],
+		"client": [
+			"com.example.randomizer.RandomizerModClient"
+		]
+	},
+	"mixins": [
+		"randomizer.mixins.json",
+		{
+			"config": "randomizer.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18.2",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
