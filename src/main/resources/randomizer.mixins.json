@@ -3,7 +3,8 @@
 	"package": "com.example.randomizer.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"ExampleMixin"
+		"ExampleMixin",
+		"BlockLootTableMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
