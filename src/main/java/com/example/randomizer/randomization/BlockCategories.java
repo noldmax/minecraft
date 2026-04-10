@@ -116,7 +116,7 @@ public final class BlockCategories {
             Blocks.NOTE_BLOCK, Blocks.TNT, Blocks.JUKEBOX,
             Blocks.IRON_BARS, Blocks.GLASS_PANE,
             Blocks.CAMPFIRE, Blocks.SOUL_CAMPFIRE,
-            Blocks.LANTERN, Blocks.SOUL_LANTERN, Blocks.CHAIN,
+            Blocks.LANTERN, Blocks.SOUL_LANTERN,
             Blocks.LIGHTNING_ROD, Blocks.BELL,
             // Shulker boxes
             Blocks.SHULKER_BOX,
