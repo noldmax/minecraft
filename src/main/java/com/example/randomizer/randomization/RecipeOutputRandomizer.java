@@ -31,7 +31,7 @@ public final class RecipeOutputRandomizer {
 
         // Crafting: shaped + shapeless (RecipeType.CRAFTING covers both)
         Set<Item> craftingItems = new LinkedHashSet<>();
-        rm.getAllRecipesFor(RecipeType.CRAFTING).stream()
+        rm.byType(RecipeType.CRAFTING).values().stream()
                 .map(holder -> holder.value().getResultItem(registries).getItem())
                 .filter(item -> item != Items.AIR)
                 .forEach(craftingItems::add);
@@ -39,19 +39,19 @@ public final class RecipeOutputRandomizer {
 
         // Smelting: all furnace variants share one pool
         Set<Item> smeltingItems = new LinkedHashSet<>();
-        rm.getAllRecipesFor(RecipeType.SMELTING).stream()
+        rm.byType(RecipeType.SMELTING).values().stream()
                 .map(holder -> holder.value().getResultItem(registries).getItem())
                 .filter(item -> item != Items.AIR)
                 .forEach(smeltingItems::add);
-        rm.getAllRecipesFor(RecipeType.BLASTING).stream()
+        rm.byType(RecipeType.BLASTING).values().stream()
                 .map(holder -> holder.value().getResultItem(registries).getItem())
                 .filter(item -> item != Items.AIR)
                 .forEach(smeltingItems::add);
-        rm.getAllRecipesFor(RecipeType.SMOKING).stream()
+        rm.byType(RecipeType.SMOKING).values().stream()
                 .map(holder -> holder.value().getResultItem(registries).getItem())
                 .filter(item -> item != Items.AIR)
                 .forEach(smeltingItems::add);
-        rm.getAllRecipesFor(RecipeType.CAMPFIRE_COOKING).stream()
+        rm.byType(RecipeType.CAMPFIRE_COOKING).values().stream()
                 .map(holder -> holder.value().getResultItem(registries).getItem())
                 .filter(item -> item != Items.AIR)
                 .forEach(smeltingItems::add);
