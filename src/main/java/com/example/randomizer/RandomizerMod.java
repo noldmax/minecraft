@@ -1,6 +1,7 @@
 package com.example.randomizer;
 
 import com.example.randomizer.randomization.BlockDropRandomizer;
+import com.example.randomizer.randomization.RecipeOutputRandomizer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.server.level.ServerLevel;
@@ -19,7 +20,9 @@ public class RandomizerMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             ServerLevel overworld = server.getLevel(Level.OVERWORLD);
             if (overworld != null) {
-                BlockDropRandomizer.initialize(overworld.getSeed());
+                long seed = overworld.getSeed();
+                BlockDropRandomizer.initialize(seed);
+                RecipeOutputRandomizer.initialize(server, seed);
             }
         });
 
