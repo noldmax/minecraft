@@ -21,21 +21,30 @@ public final class RecipeOutputRandomizer {
     private static boolean initialized = false;
 
     public static void initialize(MinecraftServer server, long seed) {
+        RandomizerMod.LOGGER.info("[Randomizer] RecipeOutputRandomizer.initialize() called");
         craftingMap.clear();
         smeltingMap.clear();
         initialized = false;
 
-        RecipeManager rm = server.getRecipeManager();
-        var registries = server.registryAccess();
-        Random random = new Random(seed);
-
-        // Temporary: log all public methods so we know the correct API for 1.21.11
-        RandomizerMod.LOGGER.info("[Randomizer] RecipeManager class: {}", rm.getClass().getName());
-        for (java.lang.reflect.Method m : rm.getClass().getMethods()) {
-            RandomizerMod.LOGGER.info("[Randomizer] RecipeManager method: {}", m.toGenericString());
+        try {
+            RecipeManager rm = server.getRecipeManager();
+            RandomizerMod.LOGGER.info("[Randomizer] RecipeManager = {}", rm);
+            if (rm == null) {
+                RandomizerMod.LOGGER.error("[Randomizer] RecipeManager is null!");
+                return;
+            }
+            RandomizerMod.LOGGER.info("[Randomizer] RecipeManager class: {}", rm.getClass().getName());
+            for (java.lang.reflect.Method m : rm.getClass().getMethods()) {
+                RandomizerMod.LOGGER.info("[Randomizer] RecipeManager method: {}", m.toGenericString());
+            }
+        } catch (Throwable t) {
+            RandomizerMod.LOGGER.error("[Randomizer] Exception during RecipeManager probe", t);
         }
         initialized = true;
         if (true) return; // remove this block once we know the method names
+
+        var registries = server.registryAccess();
+        Random random = new Random(seed);
 
         // Crafting: shaped + shapeless (RecipeType.CRAFTING covers both)
         Set<Item> craftingItems = new LinkedHashSet<>();
