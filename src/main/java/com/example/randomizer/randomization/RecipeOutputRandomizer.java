@@ -2,10 +2,7 @@ package com.example.randomizer.randomization;
 
 import com.example.randomizer.RandomizerMod;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeManager;
-import net.minecraft.world.item.crafting.RecipeType;
 
 import java.util.*;
 
@@ -41,42 +38,6 @@ public final class RecipeOutputRandomizer {
             RandomizerMod.LOGGER.error("[Randomizer] Exception during RecipeManager probe", t);
         }
         initialized = true;
-        if (true) return; // remove this block once we know the method names
-
-        var registries = server.registryAccess();
-        Random random = new Random(seed);
-
-        // Crafting: shaped + shapeless (RecipeType.CRAFTING covers both)
-        Set<Item> craftingItems = new LinkedHashSet<>();
-        rm.recipeMap().byType(RecipeType.CRAFTING).stream()
-                .map(holder -> holder.value().getResultItem(registries).getItem())
-                .filter(item -> item != Items.AIR)
-                .forEach(craftingItems::add);
-        buildMap(craftingMap, new ArrayList<>(craftingItems), random);
-
-        // Smelting: all furnace variants share one pool
-        Set<Item> smeltingItems = new LinkedHashSet<>();
-        rm.recipeMap().byType(RecipeType.SMELTING).stream()
-                .map(holder -> holder.value().getResultItem(registries).getItem())
-                .filter(item -> item != Items.AIR)
-                .forEach(smeltingItems::add);
-        rm.recipeMap().byType(RecipeType.BLASTING).stream()
-                .map(holder -> holder.value().getResultItem(registries).getItem())
-                .filter(item -> item != Items.AIR)
-                .forEach(smeltingItems::add);
-        rm.recipeMap().byType(RecipeType.SMOKING).stream()
-                .map(holder -> holder.value().getResultItem(registries).getItem())
-                .filter(item -> item != Items.AIR)
-                .forEach(smeltingItems::add);
-        rm.recipeMap().byType(RecipeType.CAMPFIRE_COOKING).stream()
-                .map(holder -> holder.value().getResultItem(registries).getItem())
-                .filter(item -> item != Items.AIR)
-                .forEach(smeltingItems::add);
-        buildMap(smeltingMap, new ArrayList<>(smeltingItems), random);
-
-        initialized = true;
-        RandomizerMod.LOGGER.info("[Randomizer] Recipe mapping initialized: {} crafting, {} smelting entries",
-                craftingMap.size(), smeltingMap.size());
     }
 
     private static void buildMap(Map<Item, Item> map, List<Item> items, Random random) {
