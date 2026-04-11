@@ -33,6 +33,7 @@ public class AbstractFurnaceBlockEntityMixin {
         if (!RecipeOutputRandomizer.isInitialized() || original.isEmpty()) return original;
         Item mapped = RecipeOutputRandomizer.getMappedSmeltingItem(original.getItem());
         if (mapped == original.getItem()) return original;
-        return new ItemStack(mapped, original.getCount());
+        int count = RecipeOutputRandomizer.getMappedSmeltingCount(mapped);
+        return new ItemStack(mapped, count);
     }
 }

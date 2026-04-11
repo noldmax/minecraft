@@ -22,6 +22,7 @@ public class ShapedRecipeMixin {
         if (original.isEmpty()) return;
         Item mapped = RecipeOutputRandomizer.getMappedCraftingItem(original.getItem());
         if (mapped == original.getItem()) return;
-        cir.setReturnValue(new ItemStack(mapped, 1));
+        int count = RecipeOutputRandomizer.getMappedCraftingCount(mapped);
+        cir.setReturnValue(new ItemStack(mapped, count));
     }
 }

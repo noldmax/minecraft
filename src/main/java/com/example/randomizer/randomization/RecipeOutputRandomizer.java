@@ -15,18 +15,25 @@ import java.util.*;
  * Crafting outputs (shaped + shapeless) shuffle among themselves.
  * All furnace-type outputs (smelting, blasting, smoking, campfire) shuffle together.
  * Mapping is deterministic: same seed = same shuffle.
+ *
+ * Count preservation: when item A maps to item B, the yield is B's original
+ * recipe count (e.g. planks originally give 4, so whatever maps to planks gives 4).
  */
 public final class RecipeOutputRandomizer {
 
     private static final Map<Item, Item> craftingMap = new HashMap<>();
     private static final Map<Item, Item> smeltingMap = new HashMap<>();
+    /** Each item's original recipe output count, used to set yield for mapped results. */
+    private static final Map<Item, Integer> craftingCounts = new HashMap<>();
+    private static final Map<Item, Integer> smeltingCounts = new HashMap<>();
     private static boolean initialized = false;
 
-    @SuppressWarnings("unchecked")
     public static void initialize(MinecraftServer server, long seed) {
         RandomizerMod.LOGGER.info("[Randomizer] Initializing recipe maps with seed {}", seed);
         craftingMap.clear();
         smeltingMap.clear();
+        craftingCounts.clear();
+        smeltingCounts.clear();
         initialized = false;
 
         RecipeManager rm = server.getRecipeManager();
@@ -35,47 +42,47 @@ public final class RecipeOutputRandomizer {
         // ── Crafting ──────────────────────────────────────────────────────────
         Set<Item> craftingOutputs = new LinkedHashSet<>();
         for (RecipeHolder<?> holder : rm.getAllOfType(RecipeType.CRAFTING)) {
-            Item item = getResultItem(holder.value());
-            if (item != null && item != Items.AIR) craftingOutputs.add(item);
+            ItemAndCount pair = getResultItemAndCount(holder.value());
+            if (pair == null || pair.item() == Items.AIR) continue;
+            if (craftingOutputs.add(pair.item())) {          // first occurrence wins
+                craftingCounts.put(pair.item(), pair.count());
+            }
         }
         buildMap(craftingMap, new ArrayList<>(craftingOutputs), random);
         RandomizerMod.LOGGER.info("[Randomizer] Crafting map: {} unique outputs", craftingMap.size());
 
         // ── Smelting (all furnace variants share one shuffle pool) ─────────────
         Set<Item> smeltingOutputs = new LinkedHashSet<>();
-        collectOutputs(rm, smeltingOutputs, RecipeType.SMELTING);
-        collectOutputs(rm, smeltingOutputs, RecipeType.BLASTING);
-        collectOutputs(rm, smeltingOutputs, RecipeType.SMOKING);
-        collectOutputs(rm, smeltingOutputs, RecipeType.CAMPFIRE_COOKING);
+        collectOutputs(rm, smeltingOutputs, smeltingCounts, RecipeType.SMELTING);
+        collectOutputs(rm, smeltingOutputs, smeltingCounts, RecipeType.BLASTING);
+        collectOutputs(rm, smeltingOutputs, smeltingCounts, RecipeType.SMOKING);
+        collectOutputs(rm, smeltingOutputs, smeltingCounts, RecipeType.CAMPFIRE_COOKING);
         buildMap(smeltingMap, new ArrayList<>(smeltingOutputs), random);
         RandomizerMod.LOGGER.info("[Randomizer] Smelting map: {} unique outputs", smeltingMap.size());
 
         initialized = true;
     }
 
-    /** Extract the primary result Item from any recipe via its display() data. */
-    private static Item getResultItem(Recipe<?> recipe) {
+    private static <I extends RecipeInput, T extends Recipe<I>> void collectOutputs(
+            RecipeManager rm, Set<Item> out, Map<Item, Integer> counts, RecipeType<T> type) {
+        for (RecipeHolder<T> holder : rm.getAllOfType(type)) {
+            ItemAndCount pair = getResultItemAndCount(holder.value());
+            if (pair == null || pair.item() == Items.AIR) continue;
+            if (out.add(pair.item())) {
+                counts.put(pair.item(), pair.count());
+            }
+        }
+    }
+
+    private static ItemAndCount getResultItemAndCount(Recipe<?> recipe) {
         List<? extends RecipeDisplay> displays = recipe.display();
         if (displays.isEmpty()) return null;
         SlotDisplay result = displays.get(0).result();
-        return slotDisplayItem(result);
-    }
-
-    private static <I extends RecipeInput, T extends Recipe<I>> void collectOutputs(
-            RecipeManager rm, Set<Item> out, RecipeType<T> type) {
-        for (RecipeHolder<T> holder : rm.getAllOfType(type)) {
-            Item item = getResultItem(holder.value());
-            if (item != null && item != Items.AIR) out.add(item);
+        if (result instanceof SlotDisplay.ItemStackSlotDisplay d) {
+            return new ItemAndCount(d.stack().getItem(), d.stack().getCount());
         }
-    }
-
-    private static Item slotDisplayItem(SlotDisplay display) {
-        if (display instanceof SlotDisplay.ItemStackSlotDisplay d) {
-            return d.stack().getItem();
-        }
-        if (display instanceof SlotDisplay.ItemSlotDisplay d) {
-            // item() returns Holder<Item> in 1.21.x
-            return d.item().value();
+        if (result instanceof SlotDisplay.ItemSlotDisplay d) {
+            return new ItemAndCount(d.item().value(), 1);
         }
         return null;
     }
@@ -92,13 +99,24 @@ public final class RecipeOutputRandomizer {
         return craftingMap.getOrDefault(original, original);
     }
 
+    /** Returns the original recipe count for the given mapped item (default 1). */
+    public static int getMappedCraftingCount(Item mapped) {
+        return craftingCounts.getOrDefault(mapped, 1);
+    }
+
     public static Item getMappedSmeltingItem(Item original) {
         return smeltingMap.getOrDefault(original, original);
+    }
+
+    public static int getMappedSmeltingCount(Item mapped) {
+        return smeltingCounts.getOrDefault(mapped, 1);
     }
 
     public static boolean isInitialized() {
         return initialized;
     }
+
+    private record ItemAndCount(Item item, int count) {}
 
     private RecipeOutputRandomizer() {}
 }
