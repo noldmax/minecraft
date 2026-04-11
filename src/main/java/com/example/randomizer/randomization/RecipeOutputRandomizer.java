@@ -29,6 +29,14 @@ public final class RecipeOutputRandomizer {
         var registries = server.registryAccess();
         Random random = new Random(seed);
 
+        // Temporary: log all public methods so we know the correct API for 1.21.11
+        RandomizerMod.LOGGER.info("[Randomizer] RecipeManager class: {}", rm.getClass().getName());
+        for (java.lang.reflect.Method m : rm.getClass().getMethods()) {
+            RandomizerMod.LOGGER.info("[Randomizer] RecipeManager method: {}", m.toGenericString());
+        }
+        initialized = true;
+        if (true) return; // remove this block once we know the method names
+
         // Crafting: shaped + shapeless (RecipeType.CRAFTING covers both)
         Set<Item> craftingItems = new LinkedHashSet<>();
         rm.recipeMap().byType(RecipeType.CRAFTING).stream()
