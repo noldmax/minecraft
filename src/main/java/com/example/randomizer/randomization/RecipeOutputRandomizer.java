@@ -43,13 +43,10 @@ public final class RecipeOutputRandomizer {
 
         // ── Smelting (all furnace variants share one shuffle pool) ─────────────
         Set<Item> smeltingOutputs = new LinkedHashSet<>();
-        for (RecipeType<?> type : new RecipeType<?>[]{ RecipeType.SMELTING, RecipeType.BLASTING,
-                RecipeType.SMOKING, RecipeType.CAMPFIRE_COOKING }) {
-            for (RecipeHolder<?> holder : rm.getAllOfType(type)) {
-                Item item = getResultItem(holder.value());
-                if (item != null && item != Items.AIR) smeltingOutputs.add(item);
-            }
-        }
+        collectOutputs(rm, smeltingOutputs, RecipeType.SMELTING);
+        collectOutputs(rm, smeltingOutputs, RecipeType.BLASTING);
+        collectOutputs(rm, smeltingOutputs, RecipeType.SMOKING);
+        collectOutputs(rm, smeltingOutputs, RecipeType.CAMPFIRE_COOKING);
         buildMap(smeltingMap, new ArrayList<>(smeltingOutputs), random);
         RandomizerMod.LOGGER.info("[Randomizer] Smelting map: {} unique outputs", smeltingMap.size());
 
@@ -64,6 +61,14 @@ public final class RecipeOutputRandomizer {
         return slotDisplayItem(result);
     }
 
+    private static <I extends RecipeInput, T extends Recipe<I>> void collectOutputs(
+            RecipeManager rm, Set<Item> out, RecipeType<T> type) {
+        for (RecipeHolder<T> holder : rm.getAllOfType(type)) {
+            Item item = getResultItem(holder.value());
+            if (item != null && item != Items.AIR) out.add(item);
+        }
+    }
+
     private static Item slotDisplayItem(SlotDisplay display) {
         if (display instanceof SlotDisplay.ItemStackSlotDisplay d) {
             return d.stack().getItem();
@@ -71,12 +76,6 @@ public final class RecipeOutputRandomizer {
         if (display instanceof SlotDisplay.ItemSlotDisplay d) {
             // item() returns Holder<Item> in 1.21.x
             return d.item().value();
-        }
-        if (display instanceof SlotDisplay.CompositeSlotDisplay d) {
-            for (SlotDisplay inner : d.contents()) {
-                Item item = slotDisplayItem(inner);
-                if (item != null && item != Items.AIR) return item;
-            }
         }
         return null;
     }
