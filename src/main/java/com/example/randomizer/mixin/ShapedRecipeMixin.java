@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ShapedRecipe.class)
 public class ShapedRecipeMixin {
 
-    @Inject(method = "assemble", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "craft", at = @At("RETURN"), cancellable = true)
     private void remapCraftingOutput(CraftingInput input, HolderLookup.Provider registries,
                                      CallbackInfoReturnable<ItemStack> cir) {
         if (!RecipeOutputRandomizer.isInitialized()) return;
