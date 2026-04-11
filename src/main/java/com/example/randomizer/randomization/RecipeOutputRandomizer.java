@@ -4,7 +4,10 @@ import com.example.randomizer.RandomizerMod;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.item.crafting.ShapedRecipe;
+import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 
+import java.lang.reflect.Method;
 import java.util.*;
 
 /**
@@ -25,18 +28,27 @@ public final class RecipeOutputRandomizer {
         initialized = false;
 
         try {
+            // Probe RecipeManager API
             RecipeManager rm = server.getRecipeManager();
-            RandomizerMod.LOGGER.info("[Randomizer] RecipeManager = {}", rm);
-            if (rm == null) {
-                RandomizerMod.LOGGER.error("[Randomizer] RecipeManager is null!");
-                return;
-            }
             RandomizerMod.LOGGER.info("[Randomizer] RecipeManager class: {}", rm.getClass().getName());
-            for (java.lang.reflect.Method m : rm.getClass().getMethods()) {
-                RandomizerMod.LOGGER.info("[Randomizer] RecipeManager method: {}", m.toGenericString());
+            RandomizerMod.LOGGER.info("[Randomizer] --- RecipeManager public methods ---");
+            for (Method m : rm.getClass().getMethods()) {
+                RandomizerMod.LOGGER.info("[Randomizer] RM method: {}", m.toGenericString());
+            }
+
+            // Probe ShapedRecipe API
+            RandomizerMod.LOGGER.info("[Randomizer] --- ShapedRecipe declared methods ---");
+            for (Method m : ShapedRecipe.class.getDeclaredMethods()) {
+                RandomizerMod.LOGGER.info("[Randomizer] ShapedRecipe method: {}", m.toGenericString());
+            }
+
+            // Probe AbstractCookingRecipe API
+            RandomizerMod.LOGGER.info("[Randomizer] --- AbstractCookingRecipe declared methods ---");
+            for (Method m : AbstractCookingRecipe.class.getDeclaredMethods()) {
+                RandomizerMod.LOGGER.info("[Randomizer] CookingRecipe method: {}", m.toGenericString());
             }
         } catch (Throwable t) {
-            RandomizerMod.LOGGER.error("[Randomizer] Exception during RecipeManager probe", t);
+            RandomizerMod.LOGGER.error("[Randomizer] Exception during probe", t);
         }
         initialized = true;
     }
