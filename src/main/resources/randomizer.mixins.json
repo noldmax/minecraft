@@ -6,7 +6,8 @@
 		"ExampleMixin",
 		"BlockDropsMixin",
 		"ShapedRecipeMixin",
-		"ShapelessRecipeMixin"
+		"ShapelessRecipeMixin",
+		"AbstractFurnaceBlockEntityMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
