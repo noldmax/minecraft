@@ -3,17 +3,18 @@ package com.example.randomizer.randomization;
 import com.example.randomizer.RandomizerMod;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.crafting.RecipeManager;
-import net.minecraft.world.item.crafting.ShapedRecipe;
-import net.minecraft.world.item.crafting.AbstractCookingRecipe;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.*;
+import net.minecraft.world.item.crafting.display.RecipeDisplay;
+import net.minecraft.world.item.crafting.display.SlotDisplay;
 
-import java.lang.reflect.Method;
 import java.util.*;
 
 /**
  * Generates and stores per-world recipe output mappings.
- * Crafting outputs shuffle among crafting outputs; all furnace-type outputs
- * shuffle together. The mapping is deterministic: same seed = same shuffle.
+ * Crafting outputs (shaped + shapeless) shuffle among themselves.
+ * All furnace-type outputs (smelting, blasting, smoking, campfire) shuffle together.
+ * Mapping is deterministic: same seed = same shuffle.
  */
 public final class RecipeOutputRandomizer {
 
@@ -21,36 +22,63 @@ public final class RecipeOutputRandomizer {
     private static final Map<Item, Item> smeltingMap = new HashMap<>();
     private static boolean initialized = false;
 
+    @SuppressWarnings("unchecked")
     public static void initialize(MinecraftServer server, long seed) {
-        RandomizerMod.LOGGER.info("[Randomizer] RecipeOutputRandomizer.initialize() called");
+        RandomizerMod.LOGGER.info("[Randomizer] Initializing recipe maps with seed {}", seed);
         craftingMap.clear();
         smeltingMap.clear();
         initialized = false;
 
-        try {
-            // Probe RecipeManager API
-            RecipeManager rm = server.getRecipeManager();
-            RandomizerMod.LOGGER.info("[Randomizer] RecipeManager class: {}", rm.getClass().getName());
-            RandomizerMod.LOGGER.info("[Randomizer] --- RecipeManager public methods ---");
-            for (Method m : rm.getClass().getMethods()) {
-                RandomizerMod.LOGGER.info("[Randomizer] RM method: {}", m.toGenericString());
-            }
+        RecipeManager rm = server.getRecipeManager();
+        Random random = new Random(seed);
 
-            // Probe ShapedRecipe API
-            RandomizerMod.LOGGER.info("[Randomizer] --- ShapedRecipe declared methods ---");
-            for (Method m : ShapedRecipe.class.getDeclaredMethods()) {
-                RandomizerMod.LOGGER.info("[Randomizer] ShapedRecipe method: {}", m.toGenericString());
-            }
-
-            // Probe AbstractCookingRecipe API
-            RandomizerMod.LOGGER.info("[Randomizer] --- AbstractCookingRecipe declared methods ---");
-            for (Method m : AbstractCookingRecipe.class.getDeclaredMethods()) {
-                RandomizerMod.LOGGER.info("[Randomizer] CookingRecipe method: {}", m.toGenericString());
-            }
-        } catch (Throwable t) {
-            RandomizerMod.LOGGER.error("[Randomizer] Exception during probe", t);
+        // ── Crafting ──────────────────────────────────────────────────────────
+        Set<Item> craftingOutputs = new LinkedHashSet<>();
+        for (RecipeHolder<?> holder : rm.getAllOfType(RecipeType.CRAFTING)) {
+            Item item = getResultItem(holder.value());
+            if (item != null && item != Items.AIR) craftingOutputs.add(item);
         }
+        buildMap(craftingMap, new ArrayList<>(craftingOutputs), random);
+        RandomizerMod.LOGGER.info("[Randomizer] Crafting map: {} unique outputs", craftingMap.size());
+
+        // ── Smelting (all furnace variants share one shuffle pool) ─────────────
+        Set<Item> smeltingOutputs = new LinkedHashSet<>();
+        for (RecipeType<?> type : new RecipeType<?>[]{ RecipeType.SMELTING, RecipeType.BLASTING,
+                RecipeType.SMOKING, RecipeType.CAMPFIRE_COOKING }) {
+            for (RecipeHolder<?> holder : rm.getAllOfType(type)) {
+                Item item = getResultItem(holder.value());
+                if (item != null && item != Items.AIR) smeltingOutputs.add(item);
+            }
+        }
+        buildMap(smeltingMap, new ArrayList<>(smeltingOutputs), random);
+        RandomizerMod.LOGGER.info("[Randomizer] Smelting map: {} unique outputs", smeltingMap.size());
+
         initialized = true;
+    }
+
+    /** Extract the primary result Item from any recipe via its display() data. */
+    private static Item getResultItem(Recipe<?> recipe) {
+        List<? extends RecipeDisplay> displays = recipe.display();
+        if (displays.isEmpty()) return null;
+        SlotDisplay result = displays.get(0).result();
+        return slotDisplayItem(result);
+    }
+
+    private static Item slotDisplayItem(SlotDisplay display) {
+        if (display instanceof SlotDisplay.ItemStackSlotDisplay d) {
+            return d.stack().getItem();
+        }
+        if (display instanceof SlotDisplay.ItemSlotDisplay d) {
+            // item() returns Holder<Item> in 1.21.x
+            return d.item().value();
+        }
+        if (display instanceof SlotDisplay.CompositeSlotDisplay d) {
+            for (SlotDisplay inner : d.contents()) {
+                Item item = slotDisplayItem(inner);
+                if (item != null && item != Items.AIR) return item;
+            }
+        }
+        return null;
     }
 
     private static void buildMap(Map<Item, Item> map, List<Item> items, Random random) {
