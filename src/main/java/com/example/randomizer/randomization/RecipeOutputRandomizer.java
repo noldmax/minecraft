@@ -2,6 +2,7 @@ package com.example.randomizer.randomization;
 
 import com.example.randomizer.RandomizerMod;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.RecipeManager;
 
 import java.util.*;
