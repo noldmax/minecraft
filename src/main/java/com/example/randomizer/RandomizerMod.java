@@ -1,6 +1,7 @@
 package com.example.randomizer;
 
 import com.example.randomizer.randomization.BlockDropRandomizer;
+import com.example.randomizer.randomization.MobDropRandomizer;
 import com.example.randomizer.randomization.RecipeOutputRandomizer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -23,6 +24,7 @@ public class RandomizerMod implements ModInitializer {
                 long seed = overworld.getSeed();
                 BlockDropRandomizer.initialize(seed);
                 RecipeOutputRandomizer.initialize(server, seed);
+                MobDropRandomizer.initialize(seed);
             }
         });
 

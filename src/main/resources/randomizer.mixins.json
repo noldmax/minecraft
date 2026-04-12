@@ -7,7 +7,8 @@
 		"BlockDropsMixin",
 		"ShapedRecipeMixin",
 		"ShapelessRecipeMixin",
-		"AbstractFurnaceBlockEntityMixin"
+		"AbstractFurnaceBlockEntityMixin",
+		"LivingEntityMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
