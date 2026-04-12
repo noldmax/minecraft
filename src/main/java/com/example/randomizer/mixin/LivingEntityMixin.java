@@ -1,36 +1,37 @@
 package com.example.randomizer.mixin;
 
 import com.example.randomizer.randomization.MobDropRandomizer;
-import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.level.storage.loot.LootTable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-
-import java.util.Optional;
 
 /**
  * Intercepts mob drop generation so that each mob drops items from a randomly
  * mapped mob's loot table instead of its own.
  *
- * In MC 1.21.11, LivingEntity.dropFromLootTable() has no getLootTable() helper;
- * it calls this.getType().getDefaultLootTable() directly.  We redirect the
- * getDefaultLootTable() call within dropFromLootTable to return the mapped
- * entity type's loot table instead.
+ * In MC 1.21.11, dropFromLootTable() obtains the loot table via the entity
+ * type, but NOT via EntityType.getDefaultLootTable().  We redirect the
+ * getType() call inside dropFromLootTable to return the mapped EntityType;
+ * whatever the method then does with that type (getDefaultLootTable,
+ * lootTable(), registry key lookup, …) will automatically use the mapped mob.
+ *
+ * require = 0 lets the game boot even if the call-site changes in a future
+ * version so we can diagnose via the probe log in MobDropRandomizer.
  */
 @Mixin(LivingEntity.class)
 public class LivingEntityMixin {
 
     @Redirect(
         method = "dropFromLootTable",
+        require = 0,
         at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/world/entity/EntityType;getDefaultLootTable()Ljava/util/Optional;")
+            target = "Lnet/minecraft/world/entity/Entity;getType()Lnet/minecraft/world/entity/EntityType;")
     )
-    private Optional<ResourceKey<LootTable>> remapMobLootTable(EntityType<?> entityType) {
-        if (!MobDropRandomizer.isInitialized()) return entityType.getDefaultLootTable();
-        EntityType<?> mapped = MobDropRandomizer.getMappedEntityType(entityType);
-        return mapped.getDefaultLootTable();
+    private EntityType<?> remapEntityTypeForDrop(LivingEntity self) {
+        if (!MobDropRandomizer.isInitialized()) return self.getType();
+        return MobDropRandomizer.getMappedEntityType(self.getType());
     }
 }
