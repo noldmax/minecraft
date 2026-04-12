@@ -2,17 +2,12 @@ package com.example.randomizer.mixin;
 
 import com.example.randomizer.randomization.MobDropRandomizer;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.storage.loot.LootTable;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.util.Optional;
 
@@ -20,34 +15,22 @@ import java.util.Optional;
  * Intercepts mob drop generation so that each mob drops items from a randomly
  * mapped mob's loot table instead of its own.
  *
- * randomizer$mappedType is set to the target entity type just before
- * dropFromLootTable runs and cleared when it exits.  getLootTable() checks
- * this field and, if non-null, returns the mapped type's loot table.
+ * In MC 1.21.11, LivingEntity.dropFromLootTable() has no getLootTable() helper;
+ * it calls this.getType().getDefaultLootTable() directly.  We redirect the
+ * getDefaultLootTable() call within dropFromLootTable to return the mapped
+ * entity type's loot table instead.
  */
 @Mixin(LivingEntity.class)
 public class LivingEntityMixin {
 
-    @Unique
-    private EntityType<?> randomizer$mappedType = null;
-
-    @Inject(method = "dropFromLootTable", at = @At("HEAD"))
-    private void setMappedType(ServerLevel level, DamageSource source,
-                                boolean causedByLastHurt, CallbackInfo ci) {
-        if (!MobDropRandomizer.isInitialized()) return;
-        LivingEntity self = (LivingEntity)(Object)this;
-        EntityType<?> mapped = MobDropRandomizer.getMappedEntityType(self.getType());
-        randomizer$mappedType = (mapped != self.getType()) ? mapped : null;
-    }
-
-    @Inject(method = "dropFromLootTable", at = @At("RETURN"))
-    private void clearMappedType(ServerLevel level, DamageSource source,
-                                  boolean causedByLastHurt, CallbackInfo ci) {
-        randomizer$mappedType = null;
-    }
-
-    @Inject(method = "getLootTable", at = @At("HEAD"), cancellable = true)
-    private void remapLootTable(CallbackInfoReturnable<Optional<ResourceKey<LootTable>>> cir) {
-        if (randomizer$mappedType == null) return;
-        cir.setReturnValue(randomizer$mappedType.getDefaultLootTable());
+    @Redirect(
+        method = "dropFromLootTable",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/EntityType;getDefaultLootTable()Ljava/util/Optional;")
+    )
+    private Optional<ResourceKey<LootTable>> remapMobLootTable(EntityType<?> entityType) {
+        if (!MobDropRandomizer.isInitialized()) return entityType.getDefaultLootTable();
+        EntityType<?> mapped = MobDropRandomizer.getMappedEntityType(entityType);
+        return mapped.getDefaultLootTable();
     }
 }
