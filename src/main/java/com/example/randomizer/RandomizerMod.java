@@ -1,6 +1,7 @@
 package com.example.randomizer;
 
 import com.example.randomizer.randomization.BlockDropRandomizer;
+import com.example.randomizer.randomization.ChestLootRandomizer;
 import com.example.randomizer.randomization.MobDropRandomizer;
 import com.example.randomizer.randomization.RecipeOutputRandomizer;
 import net.fabricmc.api.ModInitializer;
@@ -25,6 +26,7 @@ public class RandomizerMod implements ModInitializer {
                 BlockDropRandomizer.initialize(seed);
                 RecipeOutputRandomizer.initialize(server, seed);
                 MobDropRandomizer.initialize(seed);
+                ChestLootRandomizer.initialize(server, seed);
             }
         });
 

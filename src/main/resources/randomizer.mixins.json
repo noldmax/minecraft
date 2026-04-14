@@ -8,7 +8,8 @@
 		"ShapedRecipeMixin",
 		"ShapelessRecipeMixin",
 		"AbstractFurnaceBlockEntityMixin",
-		"LivingEntityMixin"
+		"LivingEntityMixin",
+		"RandomizableContainerBlockEntityMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
