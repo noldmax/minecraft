@@ -1,10 +1,8 @@
 package com.example.randomizer.randomization;
 
 import com.example.randomizer.RandomizerMod;
-import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -29,12 +27,12 @@ public final class ChestLootRandomizer {
         // ── Enumerate chest loot tables ───────────────────────────────────────
         List<ResourceKey<LootTable>> pool = new ArrayList<>();
         try {
-            Registry<LootTable> reg = server.registryAccess().registryOrThrow(Registries.LOOT_TABLE);
-            pool = reg.keySet().stream()
-                    .filter(loc -> loc.getPath().startsWith("chests/"))
-                    .sorted(Comparator.comparing(ResourceLocation::toString))
-                    .map(loc -> ResourceKey.create(Registries.LOOT_TABLE, loc))
-                    .collect(Collectors.toCollection(ArrayList::new));
+            server.registryAccess().lookup(Registries.LOOT_TABLE).ifPresent(reg ->
+                reg.listElementIds()
+                   .filter(key -> key.location().getPath().startsWith("chests/"))
+                   .sorted(Comparator.comparing(key -> key.location().toString()))
+                   .forEach(pool::add)
+            );
         } catch (Exception e) {
             RandomizerMod.LOGGER.warn("[Randomizer] Could not enumerate chest loot tables: {}", e.getMessage());
         }

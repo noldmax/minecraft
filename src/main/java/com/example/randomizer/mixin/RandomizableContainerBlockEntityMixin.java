@@ -12,8 +12,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import javax.annotation.Nullable;
-
 /**
  * Intercepts chest loot generation so that each chest type yields loot from a
  * randomly mapped chest loot table instead of its own.
@@ -31,11 +29,10 @@ public class RandomizableContainerBlockEntityMixin {
 
     @Mutable
     @Shadow
-    @Nullable
     protected ResourceKey<LootTable> lootTable;
 
     @Inject(method = "unpackLootTable", at = @At("HEAD"), require = 0)
-    private void remapChestLoot(@Nullable Player player, CallbackInfo ci) {
+    private void remapChestLoot(Player player, CallbackInfo ci) {
         if (!ChestLootRandomizer.isInitialized() || this.lootTable == null) return;
         this.lootTable = ChestLootRandomizer.getMappedKey(this.lootTable);
     }
