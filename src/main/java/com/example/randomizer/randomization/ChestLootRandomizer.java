@@ -10,6 +10,7 @@ import net.minecraft.world.level.storage.loot.LootTable;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Generates and stores the per-world chest loot-table mapping.
@@ -25,14 +26,17 @@ public final class ChestLootRandomizer {
         mapping.clear();
 
         // ── Enumerate chest loot tables ───────────────────────────────────────
+        // ResourceKey accessor method name varies by MC version; we use toString()
+        // filtering here (format: "ResourceKey[<registry> / <namespace>:<path>]")
+        // and a probe below will log the actual accessor name for cleanup later.
         List<ResourceKey<LootTable>> pool = new ArrayList<>();
         try {
-            server.registryAccess().lookup(Registries.LOOT_TABLE).ifPresent(reg ->
-                reg.listElementIds()
-                   .filter(key -> key.location().getPath().startsWith("chests/"))
-                   .sorted(Comparator.comparing(key -> key.location().toString()))
-                   .forEach(pool::add)
-            );
+            server.registryAccess().lookup(Registries.LOOT_TABLE).ifPresent(reg -> {
+                Stream<ResourceKey<LootTable>> ids = reg.listElementIds();
+                ids.filter(key -> key.toString().contains(":chests/"))
+                   .sorted(Comparator.comparing(Object::toString))
+                   .forEach(pool::add);
+            });
         } catch (Exception e) {
             RandomizerMod.LOGGER.warn("[Randomizer] Could not enumerate chest loot tables: {}", e.getMessage());
         }
@@ -49,8 +53,18 @@ public final class ChestLootRandomizer {
                     pool.size(), seed);
         }
 
-        // ── Probe: discover the correct unpack method name ────────────────────
-        // Remove once the right method is confirmed.
+        // ── Probe: discover correct method names ──────────────────────────────
+        // Remove once confirmed.
+        RandomizerMod.LOGGER.info("[Randomizer/Probe] === ResourceKey public methods ===");
+        for (Method m : ResourceKey.class.getDeclaredMethods()) {
+            if (java.lang.reflect.Modifier.isPublic(m.getModifiers())) {
+                RandomizerMod.LOGGER.info("[Randomizer/Probe] ResourceKey.{}({}) -> {}",
+                        m.getName(),
+                        Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
+                              .collect(Collectors.joining(", ")),
+                        m.getReturnType().getSimpleName());
+            }
+        }
         RandomizerMod.LOGGER.info("[Randomizer/Probe] === RandomizableContainerBlockEntity methods ===");
         for (Method m : RandomizableContainerBlockEntity.class.getDeclaredMethods()) {
             String n = m.getName().toLowerCase();
