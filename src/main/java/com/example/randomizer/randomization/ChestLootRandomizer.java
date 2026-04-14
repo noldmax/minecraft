@@ -10,7 +10,6 @@ import net.minecraft.world.level.storage.loot.LootTable;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Generates and stores the per-world chest loot-table mapping.
@@ -26,19 +25,28 @@ public final class ChestLootRandomizer {
         mapping.clear();
 
         // ── Enumerate chest loot tables ───────────────────────────────────────
-        // ResourceKey accessor method name varies by MC version; we use toString()
-        // filtering here (format: "ResourceKey[<registry> / <namespace>:<path>]")
-        // and a probe below will log the actual accessor name for cleanup later.
+        // In MC 1.21.11, ResourceKey.location() was renamed to identifier().
         List<ResourceKey<LootTable>> pool = new ArrayList<>();
         try {
-            server.registryAccess().lookup(Registries.LOOT_TABLE).ifPresent(reg -> {
-                Stream<ResourceKey<LootTable>> ids = reg.listElementIds();
-                ids.filter(key -> key.toString().contains(":chests/"))
-                   .sorted(Comparator.comparing(Object::toString))
+            var registryLookup = server.registryAccess().lookup(Registries.LOOT_TABLE);
+            if (registryLookup.isEmpty()) {
+                RandomizerMod.LOGGER.warn("[Randomizer] Chest: LOOT_TABLE registry not found in registryAccess!");
+            } else {
+                var reg = registryLookup.get();
+                reg.listElementIds()
+                   .filter(key -> key.identifier().toString().contains("chests/"))
+                   .sorted(Comparator.comparing((ResourceKey<LootTable> key) -> key.identifier().toString()))
                    .forEach(pool::add);
-            });
+                RandomizerMod.LOGGER.info("[Randomizer] Chest: found {} chest loot table(s)", pool.size());
+                if (pool.isEmpty()) {
+                    // Log samples to diagnose filter mismatch
+                    RandomizerMod.LOGGER.info("[Randomizer/Probe] Sample loot table identifiers:");
+                    reg.listElementIds().limit(10).forEach(k ->
+                        RandomizerMod.LOGGER.info("[Randomizer/Probe]   {}", k.identifier()));
+                }
+            }
         } catch (Exception e) {
-            RandomizerMod.LOGGER.warn("[Randomizer] Could not enumerate chest loot tables: {}", e.getMessage());
+            RandomizerMod.LOGGER.warn("[Randomizer] Could not enumerate chest loot tables: {}", e.getMessage(), e);
         }
 
         if (pool.isEmpty()) {
@@ -65,16 +73,13 @@ public final class ChestLootRandomizer {
                         m.getReturnType().getSimpleName());
             }
         }
-        RandomizerMod.LOGGER.info("[Randomizer/Probe] === RandomizableContainerBlockEntity methods ===");
+        RandomizerMod.LOGGER.info("[Randomizer/Probe] === ALL RandomizableContainerBlockEntity declared methods ===");
         for (Method m : RandomizableContainerBlockEntity.class.getDeclaredMethods()) {
-            String n = m.getName().toLowerCase();
-            if (n.contains("loot") || n.contains("unpack") || n.contains("load") || n.contains("fill")) {
-                RandomizerMod.LOGGER.info("[Randomizer/Probe] RCBE.{}({}) -> {}",
-                        m.getName(),
-                        Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
-                              .collect(Collectors.joining(", ")),
-                        m.getReturnType().getSimpleName());
-            }
+            RandomizerMod.LOGGER.info("[Randomizer/Probe] RCBE.{}({}) -> {}",
+                    m.getName(),
+                    Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
+                          .collect(Collectors.joining(", ")),
+                    m.getReturnType().getSimpleName());
         }
     }
 
