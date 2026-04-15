@@ -2,6 +2,7 @@ package com.example.randomizer.randomization;
 
 import com.example.randomizer.RandomizerMod;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -14,9 +15,10 @@ import java.util.*;
  * so every chest type yields loot from a different (but consistent) chest.
  * Same seed = same shuffle.
  *
- * In MC 1.21.11, loot tables are data-driven and are not present in
- * server.registryAccess(). They live in the reloadable registries, accessible
- * via server.reloadableRegistries().lookup() which returns a HolderLookup.Provider.
+ * In MC 1.21.11 there is no Registry<LootTable> accessible through either
+ * registryAccess() or reloadableRegistries(). Instead we enumerate loot table
+ * JSON files directly from the server's resource manager and reconstruct the
+ * ResourceKeys from the file paths.
  */
 public final class ChestLootRandomizer {
 
@@ -25,16 +27,28 @@ public final class ChestLootRandomizer {
     public static void initialize(MinecraftServer server, long seed) {
         mapping.clear();
 
+        // Chest loot tables live at data/<namespace>/loot_tables/chests/...json
+        // listResources("loot_tables/chests", ...) returns identifiers of the form
+        // "namespace:loot_tables/chests/name.json". Strip the "loot_tables/" prefix
+        // and ".json" suffix to get the actual loot-table key path "chests/name".
         List<ResourceKey<LootTable>> pool = new ArrayList<>();
         try {
-            server.reloadableRegistries().lookup()
-                  .lookup(Registries.LOOT_TABLE)
-                  .ifPresent(reg ->
-                      reg.listElementIds()
-                         .filter(key -> key.toString().contains("chests/"))
-                         .sorted(Comparator.comparing(Object::toString))
-                         .forEach(pool::add)
-                  );
+            server.getResourceManager()
+                  .listResources("loot_tables/chests", id -> id.toString().endsWith(".json"))
+                  .keySet()
+                  .stream()
+                  .sorted(Comparator.comparing(Object::toString))
+                  .forEach(id -> {
+                      String full = id.toString(); // "namespace:loot_tables/chests/name.json"
+                      int colon = full.indexOf(':');
+                      String namespace   = full.substring(0, colon);
+                      String resourcePath = full.substring(colon + 1); // "loot_tables/chests/name.json"
+                      String tablePath   = resourcePath.substring(
+                              "loot_tables/".length(),
+                              resourcePath.length() - ".json".length()); // "chests/name"
+                      pool.add(ResourceKey.create(Registries.LOOT_TABLE,
+                               Identifier.fromNamespaceAndPath(namespace, tablePath)));
+                  });
         } catch (Exception e) {
             RandomizerMod.LOGGER.warn("[Randomizer] Could not enumerate chest loot tables: {}", e.getMessage());
         }
