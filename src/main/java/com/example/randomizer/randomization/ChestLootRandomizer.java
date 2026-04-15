@@ -4,7 +4,6 @@ import com.example.randomizer.RandomizerMod;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.storage.loot.LootTable;
 
 import java.lang.reflect.Method;
@@ -25,29 +24,11 @@ public final class ChestLootRandomizer {
         mapping.clear();
 
         // ── Enumerate chest loot tables ───────────────────────────────────────
-        // In MC 1.21.11, ResourceKey.location() was renamed to identifier().
+        // In MC 1.21.11 the LOOT_TABLE registry is data-driven and not present in
+        // registryAccess(). We probe for the correct API via reflection and log
+        // everything needed to write a proper compile-time call next iteration.
         List<ResourceKey<LootTable>> pool = new ArrayList<>();
-        try {
-            var registryLookup = server.registryAccess().lookup(Registries.LOOT_TABLE);
-            if (registryLookup.isEmpty()) {
-                RandomizerMod.LOGGER.warn("[Randomizer] Chest: LOOT_TABLE registry not found in registryAccess!");
-            } else {
-                var reg = registryLookup.get();
-                reg.listElementIds()
-                   .filter(key -> key.identifier().toString().contains("chests/"))
-                   .sorted(Comparator.comparing((ResourceKey<LootTable> key) -> key.identifier().toString()))
-                   .forEach(pool::add);
-                RandomizerMod.LOGGER.info("[Randomizer] Chest: found {} chest loot table(s)", pool.size());
-                if (pool.isEmpty()) {
-                    // Log samples to diagnose filter mismatch
-                    RandomizerMod.LOGGER.info("[Randomizer/Probe] Sample loot table identifiers:");
-                    reg.listElementIds().limit(10).forEach(k ->
-                        RandomizerMod.LOGGER.info("[Randomizer/Probe]   {}", k.identifier()));
-                }
-            }
-        } catch (Exception e) {
-            RandomizerMod.LOGGER.warn("[Randomizer] Could not enumerate chest loot tables: {}", e.getMessage(), e);
-        }
+        enumerateChestLootTables(server, pool);
 
         if (pool.isEmpty()) {
             RandomizerMod.LOGGER.warn("[Randomizer] Chest loot pool is empty — chest randomization disabled");
@@ -61,25 +42,111 @@ public final class ChestLootRandomizer {
                     pool.size(), seed);
         }
 
-        // ── Probe: discover correct method names ──────────────────────────────
-        // Remove once confirmed.
-        RandomizerMod.LOGGER.info("[Randomizer/Probe] === ResourceKey public methods ===");
-        for (Method m : ResourceKey.class.getDeclaredMethods()) {
-            if (java.lang.reflect.Modifier.isPublic(m.getModifiers())) {
-                RandomizerMod.LOGGER.info("[Randomizer/Probe] ResourceKey.{}({}) -> {}",
-                        m.getName(),
-                        Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
-                              .collect(Collectors.joining(", ")),
-                        m.getReturnType().getSimpleName());
+        // ── Probes ────────────────────────────────────────────────────────────
+        probeIdentifierClass();
+        probeReloadableRegistries(server, pool);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void enumerateChestLootTables(MinecraftServer server, List<ResourceKey<LootTable>> pool) {
+        // Attempt 1: registryAccess (works for built-in registries, probably not loot tables)
+        try {
+            var lookup = server.registryAccess().lookup(Registries.LOOT_TABLE);
+            if (lookup.isPresent()) {
+                lookup.get().listElementIds()
+                      .filter(key -> key.toString().contains("chests/"))
+                      .sorted(Comparator.comparing(Object::toString))
+                      .forEach(pool::add);
+                if (!pool.isEmpty()) {
+                    RandomizerMod.LOGGER.info("[Randomizer] Chest: registryAccess found {} entries", pool.size());
+                    return;
+                }
             }
+        } catch (Exception e) {
+            RandomizerMod.LOGGER.warn("[Randomizer] registryAccess attempt: {}", e.getMessage());
         }
-        RandomizerMod.LOGGER.info("[Randomizer/Probe] === ALL RandomizableContainerBlockEntity declared methods ===");
-        for (Method m : RandomizableContainerBlockEntity.class.getDeclaredMethods()) {
-            RandomizerMod.LOGGER.info("[Randomizer/Probe] RCBE.{}({}) -> {}",
-                    m.getName(),
-                    Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
-                          .collect(Collectors.joining(", ")),
-                    m.getReturnType().getSimpleName());
+
+        // Attempt 2: reloadableRegistries (data-driven registries) — via reflection
+        // to avoid compile-time dependency on the exact return type.
+        try {
+            Object reloadable = server.getClass().getMethod("reloadableRegistries").invoke(server);
+
+            // The holder may expose the registry via compositeAccess(), get(), or similar.
+            // Try each until we find something that has lookup(ResourceKey).
+            for (String accessorName : new String[]{"compositeAccess", "get", "access", "registries"}) {
+                try {
+                    Method accessor = reloadable.getClass().getMethod(accessorName);
+                    Object registryAccess = accessor.invoke(reloadable);
+                    Method lookupMethod = registryAccess.getClass().getMethod("lookup", ResourceKey.class);
+                    Optional<?> opt = (Optional<?>) lookupMethod.invoke(registryAccess, Registries.LOOT_TABLE);
+                    if (opt.isPresent()) {
+                        Object reg = opt.get();
+                        Method listIds = reg.getClass().getMethod("listElementIds");
+                        @SuppressWarnings("rawtypes")
+                        java.util.stream.Stream ids = (java.util.stream.Stream) listIds.invoke(reg);
+                        ids.filter(key -> key.toString().contains("chests/"))
+                           .sorted(Comparator.comparing(Object::toString))
+                           .forEach(key -> pool.add((ResourceKey<LootTable>) key));
+                        if (!pool.isEmpty()) {
+                            RandomizerMod.LOGGER.info("[Randomizer] Chest: reloadableRegistries.{}() found {} entries",
+                                    accessorName, pool.size());
+                            return;
+                        }
+                    }
+                } catch (NoSuchMethodException ignored) {
+                } catch (Exception e) {
+                    RandomizerMod.LOGGER.warn("[Randomizer] reloadableRegistries.{}() attempt: {}", accessorName, e.getMessage());
+                }
+            }
+        } catch (NoSuchMethodException e) {
+            RandomizerMod.LOGGER.warn("[Randomizer] server.reloadableRegistries() not found");
+        } catch (Exception e) {
+            RandomizerMod.LOGGER.warn("[Randomizer] reloadableRegistries attempt: {}", e.getMessage());
+        }
+    }
+
+    private static void probeIdentifierClass() {
+        try {
+            Object sampleId = ResourceKey.class.getMethod("identifier").invoke(Registries.LOOT_TABLE);
+            Class<?> idClass = sampleId.getClass();
+            RandomizerMod.LOGGER.info("[Randomizer/Probe] Identifier class: {}", idClass.getName());
+            RandomizerMod.LOGGER.info("[Randomizer/Probe] Sample Identifier value: {}", sampleId);
+            for (Method m : idClass.getDeclaredMethods()) {
+                if (java.lang.reflect.Modifier.isPublic(m.getModifiers())
+                        && java.lang.reflect.Modifier.isStatic(m.getModifiers())
+                        && m.getParameterCount() <= 2) {
+                    RandomizerMod.LOGGER.info("[Randomizer/Probe] Identifier.static.{}({}) -> {}",
+                            m.getName(),
+                            Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
+                                  .collect(Collectors.joining(", ")),
+                            m.getReturnType().getSimpleName());
+                }
+            }
+        } catch (Exception e) {
+            RandomizerMod.LOGGER.warn("[Randomizer/Probe] Identifier probe failed: {}", e.getMessage());
+        }
+    }
+
+    private static void probeReloadableRegistries(MinecraftServer server, List<ResourceKey<LootTable>> pool) {
+        if (!pool.isEmpty()) return; // Skip if we already have the pool
+        try {
+            Object reloadable = server.getClass().getMethod("reloadableRegistries").invoke(server);
+            RandomizerMod.LOGGER.info("[Randomizer/Probe] reloadableRegistries type: {}",
+                    reloadable.getClass().getName());
+            for (Method m : reloadable.getClass().getMethods()) {
+                String n = m.getName().toLowerCase();
+                if (m.getParameterCount() <= 1 &&
+                        (n.contains("access") || n.contains("lookup") || n.contains("get")
+                                || n.contains("registry") || n.contains("composite"))) {
+                    RandomizerMod.LOGGER.info("[Randomizer/Probe] Reloadable.{}({}) -> {}",
+                            m.getName(),
+                            Arrays.stream(m.getParameterTypes()).map(Class::getSimpleName)
+                                  .collect(Collectors.joining(", ")),
+                            m.getReturnType().getSimpleName());
+                }
+            }
+        } catch (Exception e) {
+            RandomizerMod.LOGGER.warn("[Randomizer/Probe] reloadableRegistries probe: {}", e.getMessage());
         }
     }
 
