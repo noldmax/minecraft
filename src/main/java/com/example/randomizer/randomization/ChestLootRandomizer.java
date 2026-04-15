@@ -1,29 +1,28 @@
 package com.example.randomizer.randomization;
 
 import com.example.randomizer.RandomizerMod;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.loot.LootTable;
 
 import java.util.*;
 
 /**
- * Generates and stores the per-world chest loot-table mapping.
- * All chest loot tables that exist in the current world are shuffled together
- * so every chest type yields loot from a different (but consistent) chest.
- * Same seed = same shuffle.
- *
- * We build the candidate list from the known vanilla chest table paths and
- * validate each one via reloadableRegistries().getLootTable() — any key that
- * returns LootTable.EMPTY simply isn't present in this version and is skipped.
- * This avoids invalid keys in the bijection and handles version differences
- * without needing to enumerate a registry.
+ * Generates and stores the per-world chest loot-table pool.
+ * Instead of mapping chest types to each other, each individual chest is
+ * assigned a loot table deterministically based on its block position and
+ * the world seed. Two chests of the same type in different positions will
+ * get different loot tables. Same seed + same position = same table always.
  */
 public final class ChestLootRandomizer {
 
-    private static final Map<ResourceKey<LootTable>, ResourceKey<LootTable>> mapping = new HashMap<>();
+    private static final List<ResourceKey<LootTable>> pool = new ArrayList<>();
+    private static long worldSeed;
+    private static boolean initialized = false;
 
     /** All vanilla chest loot table paths as of MC 1.21.x. */
     private static final List<String> VANILLA_CHEST_PATHS = List.of(
@@ -80,12 +79,10 @@ public final class ChestLootRandomizer {
     );
 
     public static void initialize(MinecraftServer server, long seed) {
-        mapping.clear();
+        pool.clear();
+        initialized = false;
+        worldSeed = seed;
 
-        // Build the pool: include only paths whose loot table actually exists.
-        // getLootTable() returns LootTable.EMPTY for missing keys, so we can
-        // use that to filter without needing registry enumeration.
-        List<ResourceKey<LootTable>> pool = new ArrayList<>();
         for (String path : VANILLA_CHEST_PATHS) {
             ResourceKey<LootTable> key = ResourceKey.create(
                     Registries.LOOT_TABLE,
@@ -98,21 +95,34 @@ public final class ChestLootRandomizer {
         if (pool.isEmpty()) {
             RandomizerMod.LOGGER.warn("[Randomizer] Chest loot pool is empty — chest randomization disabled");
         } else {
-            List<ResourceKey<LootTable>> shuffled = new ArrayList<>(pool);
-            Collections.shuffle(shuffled, new Random(seed));
-            for (int i = 0; i < pool.size(); i++) {
-                mapping.put(pool.get(i), shuffled.get(i));
-            }
-            RandomizerMod.LOGGER.info("[Randomizer] Chest loot mapping initialized: {} tables, seed {}",
+            initialized = true;
+            RandomizerMod.LOGGER.info("[Randomizer] Chest loot pool initialized: {} tables, seed {}",
                     pool.size(), seed);
         }
     }
 
-    public static ResourceKey<LootTable> getMappedKey(ResourceKey<LootTable> original) {
-        return mapping.getOrDefault(original, original);
+    /**
+     * Returns a loot table key for the chest at the given position.
+     * The selection is derived purely from the world seed and block position,
+     * so every chest in the world gets its own independent table.
+     */
+    public static ResourceKey<LootTable> getMappedKey(BlockPos pos, ResourceKey<Level> dimension) {
+        // Mix position and dimension into the world seed for a stable per-chest hash.
+        long hash = worldSeed
+                ^ ((long) pos.getX() * 3129871L)
+                ^ ((long) pos.getY() * 116129781L)
+                ^ ((long) pos.getZ() * 1274182917L)
+                ^ ((long) dimension.toString().hashCode() * 1867861L);
+        // Wang hash finalisation — spreads bits so nearby coords don't cluster.
+        hash ^= (hash >>> 33);
+        hash *= 0xff51afd7ed558ccdL;
+        hash ^= (hash >>> 33);
+        return pool.get((int) Math.floorMod(hash, pool.size()));
     }
 
     public static boolean isInitialized() {
-        return !mapping.isEmpty();
+        return initialized;
     }
+
+    private ChestLootRandomizer() {}
 }
