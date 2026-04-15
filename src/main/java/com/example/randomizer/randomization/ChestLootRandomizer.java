@@ -11,46 +11,88 @@ import java.util.*;
 
 /**
  * Generates and stores the per-world chest loot-table mapping.
- * All loot tables whose path begins with "chests/" are shuffled together
+ * All chest loot tables that exist in the current world are shuffled together
  * so every chest type yields loot from a different (but consistent) chest.
  * Same seed = same shuffle.
  *
- * In MC 1.21.11 there is no Registry<LootTable> accessible through either
- * registryAccess() or reloadableRegistries(). Instead we enumerate loot table
- * JSON files directly from the server's resource manager and reconstruct the
- * ResourceKeys from the file paths.
+ * We build the candidate list from the known vanilla chest table paths and
+ * validate each one via reloadableRegistries().getLootTable() — any key that
+ * returns LootTable.EMPTY simply isn't present in this version and is skipped.
+ * This avoids invalid keys in the bijection and handles version differences
+ * without needing to enumerate a registry.
  */
 public final class ChestLootRandomizer {
 
     private static final Map<ResourceKey<LootTable>, ResourceKey<LootTable>> mapping = new HashMap<>();
 
+    /** All vanilla chest loot table paths as of MC 1.21.x. */
+    private static final List<String> VANILLA_CHEST_PATHS = List.of(
+            "chests/abandoned_mineshaft",
+            "chests/bastion_bridge",
+            "chests/bastion_hoglin_stable",
+            "chests/bastion_other",
+            "chests/bastion_treasure",
+            "chests/buried_treasure",
+            "chests/desert_pyramid",
+            "chests/end_city_treasure",
+            "chests/igloo_chest",
+            "chests/jungle_temple",
+            "chests/jungle_temple_dispenser",
+            "chests/nether_bridge",
+            "chests/pillager_outpost",
+            "chests/ruined_portal",
+            "chests/shipwreck_map",
+            "chests/shipwreck_supply",
+            "chests/shipwreck_treasure",
+            "chests/simple_dungeon",
+            "chests/spawn_bonus_chest",
+            "chests/stronghold_corridor",
+            "chests/stronghold_crossing",
+            "chests/stronghold_library",
+            "chests/underwater_ruin_big",
+            "chests/underwater_ruin_small",
+            "chests/village/village_armorer",
+            "chests/village/village_butcher",
+            "chests/village/village_cartographer",
+            "chests/village/village_desert_house",
+            "chests/village/village_fisher",
+            "chests/village/village_fletcher",
+            "chests/village/village_mason",
+            "chests/village/village_plains_house",
+            "chests/village/village_savanna_house",
+            "chests/village/village_shepherd",
+            "chests/village/village_snowy_house",
+            "chests/village/village_taiga_house",
+            "chests/village/village_tannery",
+            "chests/village/village_temple",
+            "chests/village/village_toolsmith",
+            "chests/village/village_weaponsmith",
+            // Trial Chambers (added in 1.21)
+            "chests/trial_chambers/corridor",
+            "chests/trial_chambers/entrance",
+            "chests/trial_chambers/intersection",
+            "chests/trial_chambers/intersection_barrel",
+            "chests/trial_chambers/supply",
+            "chests/trial_chambers/reward",
+            "chests/trial_chambers/reward_rare",
+            "chests/trial_chambers/vault",
+            "chests/trial_chambers/ominous_vault"
+    );
+
     public static void initialize(MinecraftServer server, long seed) {
         mapping.clear();
 
-        // Chest loot tables live at data/<namespace>/loot_tables/chests/...json
-        // listResources("loot_tables/chests", ...) returns identifiers of the form
-        // "namespace:loot_tables/chests/name.json". Strip the "loot_tables/" prefix
-        // and ".json" suffix to get the actual loot-table key path "chests/name".
+        // Build the pool: include only paths whose loot table actually exists.
+        // getLootTable() returns LootTable.EMPTY for missing keys, so we can
+        // use that to filter without needing registry enumeration.
         List<ResourceKey<LootTable>> pool = new ArrayList<>();
-        try {
-            server.getResourceManager()
-                  .listResources("loot_tables/chests", id -> id.toString().endsWith(".json"))
-                  .keySet()
-                  .stream()
-                  .sorted(Comparator.comparing(Object::toString))
-                  .forEach(id -> {
-                      String full = id.toString(); // "namespace:loot_tables/chests/name.json"
-                      int colon = full.indexOf(':');
-                      String namespace   = full.substring(0, colon);
-                      String resourcePath = full.substring(colon + 1); // "loot_tables/chests/name.json"
-                      String tablePath   = resourcePath.substring(
-                              "loot_tables/".length(),
-                              resourcePath.length() - ".json".length()); // "chests/name"
-                      pool.add(ResourceKey.create(Registries.LOOT_TABLE,
-                               Identifier.fromNamespaceAndPath(namespace, tablePath)));
-                  });
-        } catch (Exception e) {
-            RandomizerMod.LOGGER.warn("[Randomizer] Could not enumerate chest loot tables: {}", e.getMessage());
+        for (String path : VANILLA_CHEST_PATHS) {
+            ResourceKey<LootTable> key = ResourceKey.create(
+                    Registries.LOOT_TABLE,
+                    Identifier.fromNamespaceAndPath("minecraft", path));
+            if (server.reloadableRegistries().getLootTable(key) != LootTable.EMPTY) {
+                pool.add(key);
+            }
         }
 
         if (pool.isEmpty()) {
