@@ -19,7 +19,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.Optional;
 import java.util.function.Predicate;
 
 /**
@@ -49,7 +48,7 @@ public abstract class StructureMixin {
             int references,
             LevelHeightAccessor heightAccessor,
             Predicate<Holder<Biome>> validBiome,
-            CallbackInfoReturnable<Optional<StructureStart>> cir) {
+            CallbackInfoReturnable<StructureStart> cir) {
         if (REMAPPING.get() || !StructureRandomizer.isInitialized()) return;
 
         Structure self = (Structure) (Object) this;
