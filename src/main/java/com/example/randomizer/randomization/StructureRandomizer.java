@@ -1,6 +1,7 @@
 package com.example.randomizer.randomization;
 
 import com.example.randomizer.RandomizerMod;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -15,38 +16,40 @@ import java.util.*;
  */
 public final class StructureRandomizer {
 
-    private static final Map<Structure, Structure> mapping = new HashMap<>();
+    // Maps original Structure → the Holder of the mapped Structure.
+    // We store Holder<Structure> because Structure.generate() requires it as a parameter.
+    private static final Map<Structure, Holder<Structure>> mapping = new HashMap<>();
     private static boolean initialized = false;
 
     public static void initialize(MinecraftServer server, long seed) {
         mapping.clear();
         initialized = false;
 
-        List<Structure> pool = new ArrayList<>();
+        List<Holder.Reference<Structure>> pool = new ArrayList<>();
         server.registryAccess()
               .lookup(Registries.STRUCTURE)
-              .ifPresent(lookup -> lookup.listElements()
-                      .forEach(ref -> pool.add(ref.value())));
+              .ifPresent(lookup -> lookup.listElements().forEach(pool::add));
 
         if (pool.isEmpty()) {
             RandomizerMod.LOGGER.warn("[Randomizer] Structure pool is empty — structure randomization disabled");
             return;
         }
 
-        List<Structure> shuffled = new ArrayList<>(pool);
+        List<Holder.Reference<Structure>> shuffled = new ArrayList<>(pool);
         // Use a distinct salt so the structure shuffle is independent from other randomizers.
         Collections.shuffle(shuffled, new Random(seed ^ 0x6A09E667F3BCC908L));
 
         for (int i = 0; i < pool.size(); i++) {
-            mapping.put(pool.get(i), shuffled.get(i));
+            mapping.put(pool.get(i).value(), shuffled.get(i));
         }
         initialized = true;
         RandomizerMod.LOGGER.info("[Randomizer] Structure mapping initialized: {} structures, seed {}",
                 pool.size(), seed);
     }
 
-    public static Structure getMappedStructure(Structure original) {
-        return mapping.getOrDefault(original, original);
+    /** Returns the Holder of the mapped structure, or null if this structure is not in the pool. */
+    public static Holder<Structure> getMappedHolder(Structure original) {
+        return mapping.get(original);
     }
 
     public static boolean isInitialized() {

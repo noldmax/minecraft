@@ -3,10 +3,12 @@ package com.example.randomizer.mixin;
 import com.example.randomizer.randomization.StructureRandomizer;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
-import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -35,6 +37,8 @@ public abstract class StructureMixin {
 
     @Inject(method = "generate", at = @At("HEAD"), cancellable = true, require = 0)
     private void remapStructure(
+            Holder<Structure> selfHolder,
+            ResourceKey<Level> dimension,
             RegistryAccess registryAccess,
             ChunkGenerator chunkGenerator,
             BiomeSource biomeSource,
@@ -43,19 +47,20 @@ public abstract class StructureMixin {
             long seed,
             ChunkPos chunkPos,
             int references,
-            ChunkAccess chunk,
+            LevelHeightAccessor heightAccessor,
             Predicate<Holder<Biome>> validBiome,
             CallbackInfoReturnable<Optional<StructureStart>> cir) {
         if (REMAPPING.get() || !StructureRandomizer.isInitialized()) return;
 
         Structure self = (Structure) (Object) this;
-        Structure mapped = StructureRandomizer.getMappedStructure(self);
-        if (mapped == self) return;
+        Holder<Structure> mappedHolder = StructureRandomizer.getMappedHolder(self);
+        if (mappedHolder == null || mappedHolder.value() == self) return;
 
         REMAPPING.set(true);
         try {
-            cir.setReturnValue(mapped.generate(registryAccess, chunkGenerator, biomeSource,
-                    randomState, templateManager, seed, chunkPos, references, chunk, validBiome));
+            cir.setReturnValue(mappedHolder.value().generate(mappedHolder, dimension, registryAccess,
+                    chunkGenerator, biomeSource, randomState, templateManager, seed, chunkPos,
+                    references, heightAccessor, validBiome));
         } finally {
             REMAPPING.set(false);
         }
