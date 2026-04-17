@@ -4,6 +4,7 @@ import com.example.randomizer.randomization.BlockDropRandomizer;
 import com.example.randomizer.randomization.ChestLootRandomizer;
 import com.example.randomizer.randomization.MobDropRandomizer;
 import com.example.randomizer.randomization.RecipeOutputRandomizer;
+import com.example.randomizer.randomization.StructureRandomizer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.server.level.ServerLevel;
@@ -27,6 +28,7 @@ public class RandomizerMod implements ModInitializer {
                 RecipeOutputRandomizer.initialize(server, seed);
                 MobDropRandomizer.initialize(seed);
                 ChestLootRandomizer.initialize(server, seed);
+                StructureRandomizer.initialize(server, seed);
             }
         });
 
